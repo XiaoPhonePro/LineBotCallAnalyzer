@@ -102,8 +102,26 @@ def process_audio_in_background(event_data, flask_app_context):
                 os.remove(temp_audio_path)
                 app.logger.info(f"背景：臨時音訊檔案已刪除: {temp_audio_path}")
 
+ # In app.py, inside process_audio_in_background function
+
         # --- 推送最終訊息給用戶 ---
         if user_id:
+            # 檢查訊息長度
+            if len(final_message_to_user) > 4900: # LINE 限制 5000，預留一些空間
+                app.logger.warning(f"推送訊息過長 ({len(final_message_to_user)} 字元)，將進行截斷。")
+                # 保留結尾的處理時間訊息 (如果有的話)
+                ending_part = ""
+                if analysis_duration_text and final_message_to_user.endswith(analysis_duration_text):
+                    ending_part = analysis_duration_text
+                    # 截斷主要內容部分
+                    max_len_for_summary = 4900 - len(ending_part)
+                    final_message_to_user = final_message_to_user[:max_len_for_summary] + "...\n（內容過長，已截斷）" + ending_part
+                else:
+                    # 如果沒有時間訊息，或格式不符，直接截斷
+                    final_message_to_user = final_message_to_user[:4900] + "...\n（內容過長，已截斷）"
+                app.logger.info(f"截斷後的訊息長度: {len(final_message_to_user)}")
+
+
             try:
                 with ApiClient(configuration) as api_client_push:
                     push_api = MessagingApi(api_client_push)
@@ -113,7 +131,7 @@ def process_audio_in_background(event_data, flask_app_context):
                             messages=[TextMessage(text=final_message_to_user)]
                         )
                     )
-                    app.logger.info(f"背景：已成功推送訊息給用戶 {user_id}: {final_message_to_user}")
+                    app.logger.info(f"背景：已成功推送訊息給用戶 {user_id}") # 可以考慮在這裡也 log 出 final_message_to_user 的內容或長度
             except Exception as e:
                 app.logger.error(f"背景：推送訊息給用戶 {user_id} 失敗: {e}", exc_info=True)
 

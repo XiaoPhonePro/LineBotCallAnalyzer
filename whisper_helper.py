@@ -3,7 +3,7 @@ import whisper
 
 # 載入 Whisper 模型 (本地運行)
 # 只在文件最頂層載入一次，避免每次調用函式都重新載入
-model = whisper.load_model("large") # 或其他模型大小如 "small", "medium", "large"
+model = whisper.load_model("small") # 或其他模型大小如 "small", "medium", "large"
 
 def transcribe_audio(filepath: str) -> str:
     """
