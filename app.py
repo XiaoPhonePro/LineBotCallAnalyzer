@@ -43,25 +43,54 @@ def handle_audio(event):
     # 確保臨時檔案名是唯一的，以避免衝突
     temp_audio_path = f"temp_audio_{uuid.uuid4()}.m4a"
 
+@handler.add(MessageEvent, message=AudioMessageContent)
+def handle_audio(event):
+    message_id = event.message.id
+    temp_audio_path = f"temp_audio_{uuid.uuid4()}.m4a"
+
     try:
-        # 使用 ApiClient 來取得內容
         with ApiClient(configuration) as api_client:
-            messaging_api = MessagingApiBlob(api_client)
-            print(f"DEBUG: Type of messaging_api: {type(messaging_api)}")
-            print(f"DEBUG: Attributes of messaging_api: {dir(messaging_api)}") # 這一行會印出很多東西
-            # 使用 get_message_content 方法
-            with messaging_api.get_message_content(message_id) as audio_content:
+            messaging_api = MessagingApiBlob(api_client) # 確保這是 MessagingApiBlob
+            print(f"DEBUG: Type of messaging_api: {type(messaging_api)}") # 這行可以保留或移除
+
+            print(f"DEBUG: Attempting to get content for message_id: {message_id}")
+            audio_data_bytes = messaging_api.get_message_content(message_id) # 直接接收 bytes 資料
+            print(f"DEBUG: Type of value returned: {type(audio_data_bytes)}")
+            # 您可以印出一小部分 bytes 來確認，但不要印全部，因為可能很長
+            # print(f"DEBUG: Value returned by get_message_content (first 100 bytes): {audio_data_bytes[:100]}")
+
+            if audio_data_bytes is None:
+                print(f"ERROR: get_message_content returned None for message_id: {message_id}")
+                # 可以在這裡回覆錯誤訊息給用戶
+                with ApiClient(configuration) as error_api_client:
+                    error_messaging_api = MessagingApi(error_api_client)
+                    error_messaging_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text="抱歉，無法取得您傳送的音訊內容。")]
+                        )
+                    )
+                return # 提前結束，不再處理
+
+            elif isinstance(audio_data_bytes, bytes):
+                print(f"DEBUG: Successfully received audio data as bytes for message_id: {message_id}")
                 with open(temp_audio_path, "wb") as f:
-                    for chunk in audio_content.iter_content():
-                        f.write(chunk)
-        
+                    f.write(audio_data_bytes) # 直接將 bytes 寫入檔案
+                print(f"DEBUG: Audio content written to {temp_audio_path}")
+            else:
+                # 理論上不太可能走到這裡，因為上面已經確認是 bytes 或 None
+                print(f"ERROR: get_message_content returned an unexpected type: {type(audio_data_bytes)}")
+                # 也可以在這裡回覆錯誤訊息給用戶
+                return # 提前結束
+
+        # --- 音訊已成功儲存，接下來進行轉錄和摘要 ---
         text = transcribe_audio(temp_audio_path)
         summary = summarize_text(text)
 
         # 使用 v3 的 TextMessage 和 ReplyMessageRequest
         with ApiClient(configuration) as api_client:
-            messaging_api = MessagingApi(api_client)
-            messaging_api.reply_message(
+            messaging_api_reply = MessagingApi(api_client) # 為了清晰，可以改個名字
+            messaging_api_reply.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
                     messages=[TextMessage(text=summary)]
@@ -73,18 +102,18 @@ def handle_audio(event):
         print(f"處理語音或摘要時發生錯誤: {e}")
         # 在這裡可以發送錯誤訊息給用戶
         with ApiClient(configuration) as api_client:
-            messaging_api = MessagingApi(api_client)
-            messaging_api.reply_message(
+            messaging_api_error = MessagingApi(api_client) # 為了清晰，可以改個名字
+            messaging_api_error.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[TextMessage(text="抱歉，服務發生問題。請稍後再試。")]
+                    messages=[TextMessage(text="抱歉，處理您的請求時發生內部錯誤。")]
                 )
             )
     finally:
         # 確保臨時檔案被刪除
         if os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
-            print(f"臨時音訊檔案已刪除: {temp_audio_path}") # 可選：打印刪除訊息
+            print(f"臨時音訊檔案已刪除: {temp_audio_path}")
 
 if __name__ == "__main__":
     app.run(port=5000)

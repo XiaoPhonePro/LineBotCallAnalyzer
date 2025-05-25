@@ -16,7 +16,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 # 初始化 Gemini 模型
 # 選擇適合摘要的模型，gemini-1.5-flash 速度快且費用相對低廉
 # 如果需要更高品質的摘要，可以嘗試 gemini-1.5-pro
-GEMINI_MODEL_NAME = "gemini-1.5-flash"
+GEMINI_MODEL_NAME = "Gemini-2.5-Flash"
 model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
 def summarize_text(text: str) -> str:
